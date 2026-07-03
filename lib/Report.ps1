@@ -159,13 +159,23 @@ function Export-TestReport {
         } catch { $duration = '-' }
     }
 
+    $ramSpec = Get-HtmlEncoded "$($inv.RAM_GB) GB | $($inv.RAM_Sticks)"
+    $highlightsBlock = if ($highlights) {
+        "<div class=""highlights""><h2>Destaques dos testes</h2><div class=""highlights-grid"">$highlights</div></div>"
+    } else { '' }
+
+    $pctPass = [math]::Round([math]::Max(0, $sum.Passed / $totalTests * 100), 1)
+    $pctWarn = [math]::Round([math]::Max(0, $sum.Warn / $totalTests * 100), 1)
+    $pctFail = [math]::Round([math]::Max(0, $sum.Failed / $totalTests * 100), 1)
+    $pctSkip = [math]::Round([math]::Max(0, $sum.Skip / $totalTests * 100), 1)
+
     $html = @"
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Laudo Tecnico — $machine — $dateBr</title>
+<title>Laudo Tecnico - $machine - $dateBr</title>
 <style>
   :root {
     --bg: #f4f6f9;
@@ -420,10 +430,10 @@ function Export-TestReport {
   <div class="progress-section">
     <h3>Distribuicao dos resultados</h3>
     <div class="progress-bar">
-      <div class="seg-pass" style="width:$([math]::Max(0,$sum.Passed/$totalTests*100))%"></div>
-      <div class="seg-warn" style="width:$([math]::Max(0,$sum.Warn/$totalTests*100))%"></div>
-      <div class="seg-fail" style="width:$([math]::Max(0,$sum.Failed/$totalTests*100))%"></div>
-      <div class="seg-skip" style="width:$([math]::Max(0,$sum.Skip/$totalTests*100))%"></div>
+      <div class="seg-pass" style="width:${pctPass}%"></div>
+      <div class="seg-warn" style="width:${pctWarn}%"></div>
+      <div class="seg-fail" style="width:${pctFail}%"></div>
+      <div class="seg-skip" style="width:${pctSkip}%"></div>
     </div>
     <div class="progress-legend">
       <span>&#9679; Aprovados ($($sum.Passed))</span>
@@ -446,19 +456,19 @@ function Export-TestReport {
       <h3>Componentes</h3>
       <div class="spec-row"><span class="spec-label">CPU</span><span class="spec-value">$(Get-HtmlEncoded $inv.CPU)</span></div>
       <div class="spec-row"><span class="spec-label">GPU</span><span class="spec-value">$(Get-HtmlEncoded $inv.GPU)</span></div>
-      <div class="spec-row"><span class="spec-label">RAM</span><span class="spec-value">$(Get-HtmlEncoded "$($inv.RAM_GB) GB — $($inv.RAM_Sticks)")</span></div>
+      <div class="spec-row"><span class="spec-label">RAM</span><span class="spec-value">$ramSpec</span></div>
       <div class="spec-row"><span class="spec-label">Discos</span><span class="spec-value">$(Get-HtmlEncoded $inv.Disks)</span></div>
       <div class="spec-row"><span class="spec-label">Volumes</span><span class="spec-value">$(Get-HtmlEncoded $inv.Volumes)</span></div>
     </div>
   </div>
 
-  $(if ($highlights) { "<div class=`"highlights`"><h2>Destaques dos testes</h2><div class=`"highlights-grid`">$highlights</div></div>" } else { '' })
+  $highlightsBlock
 
   <h2 style="font-size:1.15rem;margin-bottom:16px;">Detalhamento completo</h2>
   $sections
 
   <footer class="footer">
-    <p><strong>Hardware Test Kit</strong> — Relatorio gerado automaticamente</p>
+    <p><strong>Hardware Test Kit</strong> - Relatorio gerado automaticamente</p>
     <p>Inicio: $($Script:Report.Meta.StartedAt) &nbsp;|&nbsp; Fim: $($Script:Report.Meta.FinishedAt)</p>
     <div class="disclaimer">
       Este laudo e uma ferramenta de apoio a decisao de compra. Recomenda-se inspecao fisica do equipamento,
