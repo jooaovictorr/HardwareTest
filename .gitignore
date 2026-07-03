@@ -1,0 +1,5 @@
+# Relatorios gerados localmente (nao enviar ao GitHub)
+reports/
+*.html
+*.json
+!config.psd1
