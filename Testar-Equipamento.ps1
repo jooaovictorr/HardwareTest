@@ -156,7 +156,7 @@ if ($isGpuMode) {
 # ─── RELATORIO ─────────────────────────────────────────────────────
 
 Write-TestLog 'Gerando relatorio' -Level Title
-$result = Export-TestReport -OutputDir $ReportsDir -Mode $Modo
+$result = Export-TestReport -OutputDir $ReportsDir -KitRoot $ScriptRoot -Mode $Modo
 
 Write-Host ''
 Write-Host '  ==========================================' -ForegroundColor White
@@ -169,12 +169,13 @@ Write-Host ("  Falhou:   {0}" -f $Script:Report.Summary.Failed) -ForegroundColor
 Write-Host ("  Alertas:  {0}" -f $Script:Report.Summary.Warn) -ForegroundColor Yellow
 Write-Host '  ==========================================' -ForegroundColor White
 Write-Host ''
-Write-Host ("  Relatorio: {0}" -f $result.Html) -ForegroundColor Cyan
+Write-Host ("  Relatorio completo: {0}" -f $result.Html) -ForegroundColor Cyan
+Write-Host ("  Ultimo laudo (pasta): {0}" -f $result.Latest) -ForegroundColor Cyan
 Write-Host ''
 
 if ($AbrirRelatorio -or (-not $explicitMode)) {
-    $open = Read-Host '  Abrir relatorio no navegador? (S/n)'
+    $open = Read-Host '  Abrir ultimo laudo no navegador? (S/n)'
     if ($open -notmatch '^[Nn]') {
-        Start-Process $result.Html
+        Start-Process $result.Latest
     }
 }

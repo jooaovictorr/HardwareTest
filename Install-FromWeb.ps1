@@ -81,15 +81,18 @@ Write-Ok 'Download concluido!'
 $WshShell = New-Object -ComObject WScript.Shell
 
 $shortcuts = @{
-    'Hardware Test Kit.lnk'     = @{ Target = 'Testar-Equipamento.bat'; Desc = 'Suite completa de testes' }
-    'Testar GPU.lnk'            = @{ Target = 'Testar-Equipamento.ps1'; Args = '-Modo GPU -GpuStressMinutos 5 -InstalarApps'; Desc = 'Teste de placa de video 5min' }
-    'Testar Teclado.lnk'        = @{ Target = 'Testar-Teclado.bat'; Desc = 'Teste de teclado notebook' }
+    'Hardware Test Kit.lnk'       = @{ Target = 'Testar-Equipamento.bat'; Desc = 'Suite completa de testes' }
+    'Testar GPU.lnk'              = @{ Target = 'Testar-Equipamento.ps1'; Args = '-Modo GPU -GpuStressMinutos 5'; Desc = 'Teste de placa de video 5min' }
+    'Testar Teclado.lnk'          = @{ Target = 'Testar-Teclado.bat'; Desc = 'Teste de teclado notebook' }
+    'Abrir Ultimo Relatorio.lnk'  = @{ Target = 'Ultimo-Relatorio.html'; Desc = 'Ultimo laudo tecnico'; IsFile = $true }
 }
 
 foreach ($name in $shortcuts.Keys) {
     $info = $shortcuts[$name]
     $lnk = $WshShell.CreateShortcut((Join-Path $Desktop $name))
-    if ($info.Target -like '*.bat') {
+    if ($info.IsFile) {
+        $lnk.TargetPath = Join-Path $InstallDir $info.Target
+    } elseif ($info.Target -like '*.bat') {
         $lnk.TargetPath = Join-Path $InstallDir $info.Target
     } else {
         $lnk.TargetPath = 'powershell.exe'
