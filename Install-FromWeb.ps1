@@ -1,31 +1,21 @@
 #Requires -Version 5.1
 <#
 .SYNOPSIS
-    Baixa o Hardware Test Kit da internet e executa com permissoes elevadas.
-
-.PARAMETER RepoUrl
-    URL base do repositorio (GitHub raw ou seu servidor).
-    Exemplo: https://raw.githubusercontent.com/SEU_USUARIO/HardwareTest/main
-
-.PARAMETER InstalarApenas
-    So baixa os arquivos, nao executa o teste.
+    Baixa o Hardware Test Kit para a Area de Trabalho e executa os testes.
 
 .EXAMPLE
-    # Depois de hospedar no GitHub, rode como Administrador:
-    irm https://raw.githubusercontent.com/SEU_USUARIO/HardwareTest/main/Install-FromWeb.ps1 | iex
-
-.EXAMPLE
-    .\Install-FromWeb.ps1 -RepoUrl "https://raw.githubusercontent.com/SEU_USUARIO/HardwareTest/main"
+    irm https://raw.githubusercontent.com/jooaovictorr/HardwareTest/main/Install-FromWeb.ps1 | iex
 #>
 
 [CmdletBinding()]
 param(
     [string]$RepoUrl = 'https://raw.githubusercontent.com/jooaovictorr/HardwareTest/main',
-    [string]$InstallDir = "$env:USERPROFILE\HardwareTest",
+    [string]$InstallDir = '',
     [switch]$InstalarApenas,
     [ValidateSet('Auto', 'GPU', 'Notebook', 'Completo', 'Rapido')]
     [string]$Modo = 'Auto',
-    [switch]$InstalarApps
+    [switch]$SemInstalarApps,
+    [switch]$SemStress
 )
 
 $ErrorActionPreference = 'Stop'
@@ -36,8 +26,10 @@ function Write-Ok([string]$Msg)   { Write-Host "[OK] $Msg" -ForegroundColor Gree
 function Write-Err([string]$Msg)  { Write-Host "[XX] $Msg" -ForegroundColor Red }
 
 $InstallScriptUrl = 'https://raw.githubusercontent.com/jooaovictorr/HardwareTest/main/Install-FromWeb.ps1'
+$Desktop = [Environment]::GetFolderPath('Desktop')
+if (-not $InstallDir) { $InstallDir = Join-Path $Desktop 'HardwareTest' }
 
-# ── 1. Auto-elevar para Administrador (funciona com irm | iex) ───────
+# ── 1. Auto-elevar para Administrador ───────────────────────────────
 $isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()
 ).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 
@@ -52,27 +44,20 @@ if (-not $isAdmin) {
 
 Write-Ok 'Executando como Administrador'
 
-# ── 3. Lista de arquivos para baixar ────────────────────────────────
+# ── 2. Baixar arquivos do GitHub ──────────────────────────────────────
 $files = @(
-    'config.psd1'
-    'Testar-Equipamento.ps1'
-    'Testar-Equipamento.bat'
-    'Testar-Teclado.bat'
-    'lib\Core.ps1'
-    'lib\Tests-System.ps1'
-    'lib\Tests-GPU.ps1'
-    'lib\Tests-Hardware.ps1'
-    'lib\Tests-Notebook.ps1'
-    'lib\Tests-Keyboard.ps1'
-    'lib/Report.ps1'
+    'config.psd1', 'Testar-Equipamento.ps1', 'Testar-Equipamento.bat', 'Testar-Teclado.bat',
+    'lib/Core.ps1', 'lib/Report.ps1', 'lib/Tests-System.ps1', 'lib/Tests-GPU.ps1',
+    'lib/Tests-Hardware.ps1', 'lib/Tests-Notebook.ps1', 'lib/Tests-Keyboard.ps1'
 )
 
 Write-Step "Baixando de: $RepoUrl"
-Write-Step "Instalando em: $InstallDir"
+Write-Step "Pasta na Area de Trabalho: $InstallDir"
 
 New-Item -ItemType Directory -Force -Path $InstallDir | Out-Null
 New-Item -ItemType Directory -Force -Path (Join-Path $InstallDir 'lib') | Out-Null
 New-Item -ItemType Directory -Force -Path (Join-Path $InstallDir 'reports') | Out-Null
+New-Item -ItemType Directory -Force -Path (Join-Path $InstallDir 'Ferramentas') | Out-Null
 
 $failed = @()
 foreach ($file in $files) {
@@ -80,7 +65,6 @@ foreach ($file in $files) {
     $dest = Join-Path $InstallDir ($file -replace '/', '\')
     $parent = Split-Path $dest -Parent
     if (-not (Test-Path $parent)) { New-Item -ItemType Directory -Force -Path $parent | Out-Null }
-
     try {
         Invoke-WebRequest -Uri $url -OutFile $dest -UseBasicParsing
         Write-Ok $file
@@ -90,32 +74,72 @@ foreach ($file in $files) {
     }
 }
 
-if ($failed.Count -gt 0) {
-    Write-Err "$($failed.Count) arquivo(s) falharam. Verifique a URL do repositorio."
-    Write-Host ''
-    Write-Host 'Verifique a URL do repositorio.' -ForegroundColor Yellow
-    exit 1
-}
-
+if ($failed.Count -gt 0) { exit 1 }
 Write-Ok 'Download concluido!'
 
-# Atalho na area de trabalho
-$desktop = [Environment]::GetFolderPath('Desktop')
+# ── 3. Atalhos na Area de Trabalho ────────────────────────────────────
 $WshShell = New-Object -ComObject WScript.Shell
-$lnk = $WshShell.CreateShortcut("$desktop\Hardware Test Kit.lnk")
-$lnk.TargetPath = Join-Path $InstallDir 'Testar-Equipamento.bat'
-$lnk.WorkingDirectory = $InstallDir
-$lnk.Save()
-Write-Ok "Atalho criado na area de trabalho"
+
+$shortcuts = @{
+    'Hardware Test Kit.lnk'     = @{ Target = 'Testar-Equipamento.bat'; Desc = 'Suite completa de testes' }
+    'Testar GPU.lnk'            = @{ Target = 'Testar-Equipamento.ps1'; Args = '-Modo GPU -GpuStressMinutos 5 -InstalarApps'; Desc = 'Teste de placa de video 5min' }
+    'Testar Teclado.lnk'        = @{ Target = 'Testar-Teclado.bat'; Desc = 'Teste de teclado notebook' }
+}
+
+foreach ($name in $shortcuts.Keys) {
+    $info = $shortcuts[$name]
+    $lnk = $WshShell.CreateShortcut((Join-Path $Desktop $name))
+    if ($info.Target -like '*.bat') {
+        $lnk.TargetPath = Join-Path $InstallDir $info.Target
+    } else {
+        $lnk.TargetPath = 'powershell.exe'
+        $lnk.Arguments = "-NoProfile -ExecutionPolicy Bypass -File `"$(Join-Path $InstallDir $info.Target)`" $($info.Args)"
+    }
+    $lnk.WorkingDirectory = $InstallDir
+    $lnk.Description = $info.Desc
+    $lnk.IconLocation = 'powershell.exe,0'
+    $lnk.Save()
+    Write-Ok "Atalho: $name"
+}
+
+# ── 4. Instalar ferramentas (winget) + atalhos em Ferramentas\ ────────
+if (-not $SemInstalarApps) {
+    Write-Step 'Instalando ferramentas de teste (FurMark, GPU-Z, OCCT, CrystalDiskInfo)...'
+    . (Join-Path $InstallDir 'lib\Core.ps1')
+    $Config = Import-PowerShellDataFile (Join-Path $InstallDir 'config.psd1')
+    $toolsDir = Join-Path $InstallDir 'Ferramentas'
+
+    foreach ($toolName in $Config.Tools.Keys) {
+        $tool = $Config.Tools[$toolName]
+        $exe = Find-ToolExe -Paths $tool.ExePaths
+        if (-not $exe) {
+            Write-Step "Instalando $toolName via winget..."
+            if (Install-TestTool -WingetId $tool.Id -Name $toolName) {
+                $exe = Find-ToolExe -Paths $tool.ExePaths
+            }
+        }
+        if ($exe) {
+            $tl = $WshShell.CreateShortcut((Join-Path $toolsDir "$toolName.lnk"))
+            $tl.TargetPath = $exe
+            $tl.WorkingDirectory = Split-Path $exe -Parent
+            $tl.Description = $toolName
+            $tl.Save()
+            Write-Ok "$toolName -> Ferramentas\$toolName.lnk"
+        } else {
+            Write-Err "$toolName nao instalado"
+        }
+    }
+}
 
 if ($InstalarApenas) {
     Write-Host "`nInstalado em: $InstallDir" -ForegroundColor Green
     exit 0
 }
 
-# ── 4. Executar testes ──────────────────────────────────────────────
+# ── 5. Executar testes ────────────────────────────────────────────────
 Write-Step 'Iniciando Hardware Test Kit...'
-$args = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', (Join-Path $InstallDir 'Testar-Equipamento.ps1'), '-Modo', $Modo)
-if ($InstalarApps) { $args += '-InstalarApps' }
+$testArgs = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', (Join-Path $InstallDir 'Testar-Equipamento.ps1'), '-Modo', $Modo)
+if (-not $SemInstalarApps) { $testArgs += '-InstalarApps' }
+if ($SemStress) { $testArgs += '-SemStress' }
 
-& powershell.exe @args
+& powershell.exe @testArgs
