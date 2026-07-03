@@ -29,36 +29,28 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force | Out-Null
 
 function Write-Step([string]$Msg) { Write-Host "[>>] $Msg" -ForegroundColor Cyan }
 function Write-Ok([string]$Msg)   { Write-Host "[OK] $Msg" -ForegroundColor Green }
 function Write-Err([string]$Msg)  { Write-Host "[XX] $Msg" -ForegroundColor Red }
 
-# ── 1. Verificar Administrador ──────────────────────────────────────
+$InstallScriptUrl = 'https://raw.githubusercontent.com/jooaovictorr/HardwareTest/main/Install-FromWeb.ps1'
+
+# ── 1. Auto-elevar para Administrador (funciona com irm | iex) ───────
 $isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()
 ).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 
 if (-not $isAdmin) {
-    Write-Err 'Este script precisa rodar como ADMINISTRADOR.'
-    Write-Host ''
-    Write-Host 'Opcoes:' -ForegroundColor Yellow
-    Write-Host '  1. Clique direito no PowerShell > Executar como administrador'
-    Write-Host '  2. Cole o comando abaixo num PowerShell ADMIN:'
-    Write-Host ''
-    $self = $MyInvocation.MyCommand.Path
-    if ($self) {
-        Write-Host "  Start-Process powershell -Verb RunAs -ArgumentList '-NoProfile -ExecutionPolicy Bypass -File `"$self`"'" -ForegroundColor White
-    } else {
-        Write-Host '  irm URL_DO_INSTALL.ps1 | iex' -ForegroundColor White
-    }
-    exit 1
+    Write-Step 'Solicitando permissao de Administrador...'
+    $elevate = "Set-ExecutionPolicy Bypass -Scope Process -Force; irm '$InstallScriptUrl' | iex"
+    Start-Process powershell.exe -Verb RunAs -ArgumentList @(
+        '-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', $elevate
+    ) | Out-Null
+    exit 0
 }
 
 Write-Ok 'Executando como Administrador'
-
-# ── 2. Politica de execucao (sessao atual) ───────────────────────────
-Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force | Out-Null
-Write-Ok 'ExecutionPolicy Bypass ativo nesta sessao'
 
 # ── 3. Lista de arquivos para baixar ────────────────────────────────
 $files = @(
@@ -101,7 +93,7 @@ foreach ($file in $files) {
 if ($failed.Count -gt 0) {
     Write-Err "$($failed.Count) arquivo(s) falharam. Verifique a URL do repositorio."
     Write-Host ''
-    Write-Host 'A URL padrao ainda aponta para SEU_USUARIO - edite apos criar o repo no GitHub.' -ForegroundColor Yellow
+    Write-Host 'Verifique a URL do repositorio.' -ForegroundColor Yellow
     exit 1
 }
 
